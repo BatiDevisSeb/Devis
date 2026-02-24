@@ -46,7 +46,7 @@
     </header>
 
     <section class="gestion-catalogue">
-        <h4 style="margin-top:0;">📦 Ajouter un article au catalogue</h4>
+        <h4 style="margin-top:0;">📦 Ajouter au catalogue</h4>
         <div style="display: flex; gap: 5px;">
             <input type="text" id="newRef" placeholder="Code">
             <input type="text" id="newDesc" placeholder="Désignation" style="flex:2;">
@@ -141,7 +141,6 @@
         const recherche = input.value.toUpperCase();
         const row = input.parentElement.parentElement;
         
-        // 1. Recherche par code exact
         if (catalogue[recherche]) {
             row.querySelector('.desc').value = catalogue[recherche].desc;
             row.querySelector('.pu').value = catalogue[recherche].prix;
@@ -149,11 +148,10 @@
             return;
         }
 
-        // 2. Recherche par mot-clé (si plus de 2 lettres)
         if (recherche.length > 2) {
             for (let code in catalogue) {
                 if (catalogue[code].desc.toUpperCase().includes(recherche)) {
-                    input.value = code; // Remplace par le code trouvé
+                    input.value = code;
                     row.querySelector('.desc').value = catalogue[code].desc;
                     row.querySelector('.pu').value = catalogue[code].prix;
                     calculerTotalGeneral();
