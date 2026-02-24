@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BatiDevis - Catalogue Mis à Jour</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f7f6; padding: 20px; color: #333; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        header { display: flex; justify-content: space-between; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+        .infos-entreprise, .infos-prospect { width: 45%; display: flex; flex-direction: column; }
+        input, textarea, select { border: 1px solid #ddd; padding: 8px; margin-bottom: 5px; border-radius: 4px; font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th { background: #34495e; color: white; padding: 10px; text-align: left; }
+        td { border-bottom: 1px solid #eee; padding: 10px; }
+        .gestion-catalogue { background: #e8f4fd; padding: 15px; border-radius: 5px; margin-bottom: 20px; border: 1px solid #3498db; }
+        .actions { margin: 20px 0; display: flex; gap: 10px; }
+        button { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-add { background: #3498db; color: white; }
+        .btn-pdf { background: #27ae60; color: white; }
+        .btn-reset { background: #e74c3c; color: white; }
+        .total-section { text-align: right; margin-top: 20px; }
+        @media print {
+            .gestion-catalogue, button, .choix-tva, .actions, #aideRecherche { display: none !important; }
+            input, textarea { border: none !important; background: transparent !important; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container" id="devisContent">
+    <header>
+        <div class="infos-entreprise">
+            <input type="text" id="nomEntreprise" placeholder="Nom de ton Entreprise">
+            <textarea id="adresseEntreprise" placeholder="Adresse complète"></textarea>
+            <input type="text" id="siretEntreprise" placeholder="SIRET">
+            <input type="text" id="telEntreprise" placeholder="Téléphone / Email">
+        </div>
+        <div class="infos-prospect" style="text-align: right;">
+            <h2 style="margin:0;">DEVIS</h2>
+            <input type="text" id="nomClient" placeholder="Nom du prospect" style="text-align: right;">
+            <textarea id="adresseClient" placeholder="Adresse du chantier" style="text-align: right;"></textarea>
+            <input type="date" id="dateDevis" style="text-align: right;">
+        </div>
+    </header>
+
+    <section class="gestion-catalogue">
+        <h4 style="margin-top:0;">📦 Ajouter au catalogue</h4>
+        <div style="display: flex; gap: 5px;">
+            <input type="text" id="newRef" placeholder="Code">
+            <input type="text" id="newDesc" placeholder="Désignation" style="flex:2;">
+            <input type="number" id="newPrix" placeholder="Prix HT">
+            <button onclick="ajouterAuCatalogue()" style="background:#2c3e50; color:white;">Enregistrer</button>
+        </div>
+        <div id="aideRecherche" style="font-size: 12px; margin-top: 10px; color: #555;">
+            <strong>Astuce :</strong> Tape un mot dans la colonne "Clé" pour chercher (ex: "Pomme").
+        </div>
+    </section>
+
+    <table id="tableDevis">
+        <thead>
+            <tr>
+                <th>Clé / Recherche</th>
+                <th>Désignation</th>
+                <th>Qté</th>
+                <th>PU HT</th>
+                <th>Total HT</th>
+            </tr>
+        </thead>
+        <tbody id="corpsDevis"></tbody>
+    </table>
+
+    <div class="actions">
+        <button class="btn-add" onclick="ajouterLigne()">+ Ajouter une ligne</button>
+        <button class="btn-reset" onclick="reinitialiserDevis()">🗑️ Nouveau Devis</button>
+        <button class="btn-pdf" onclick="genererPDF()" style="margin-left: auto;">📄 Télécharger PDF</button>
+    </div>
+
+    <div class="choix-tva" style="text-align: right;">
+        <label>Taux de TVA : </label>
+        <select id="tauxTVA" onchange="calculerTotalGeneral()">
+            <option value="0.20">20% (Normal)</option>
+            <option value="0.10">10% (Rénovation)</option>
+            <option value="0.055">5.5% (Énergie)</option>
+        </select>
+    </div>
+
+    <div class="total-section">
+        <p>Total HT : <span id="totalHT">0.00</span> €</p>
+        <p>TVA (<span id="tvaAffichee">20</span>%) : <span id="montantTVA">0.00</span> €</p>
+        <p style="font-size: 1.4em; font-weight: bold; border-top: 2px solid #333; padding-top: 10px;">
+            TOTAL TTC : <span id="totalTTC">0.00</span> €
+        </p>
+    </div>
+</div>
+
+<script>
+    // CATALOGUE COMPLET EXTRAIT DU PDF
+    let catalogue = JSON.parse(localStorage.getItem('monCatalogue')) || {
+        "PINCE01": { desc: "Pince pour écrous à sertir Parkside", prix: 23.69 },
+        "TSHIRT01": { desc: "T-shirt technique manches longues", prix: 6.39 },
+        "CALG01": { desc: "Calgon Gel Hygiène (2,3 L)", prix: 9.59 },
+        "ARIE01": { desc: "Ariel Original Pods (36 doses)", prix: 9.23 },
+        "PAPI01": { desc: "Papier toilette parfumé (20 rouleaux)", prix: 8.99 },
+        "VOLV01": { desc: "Eau de source Volvic (6x1,5L)", prix: 3.00 },
+        "CAFE01": { desc: "Café Lavazza Espresso (2x250g)", prix: 6.92 },
+        "THON01": { desc: "Thon au naturel Petit Navire (3x140g)", prix: 6.53 },
+        "STEA01": { desc: "8 Steaks hachés pur bœuf XXL (1kg)", prix: 14.99 },
+        "POUL01": { desc: "Filets de poulet (1kg)", prix: 7.99 },
+        "KIWI01": { desc: "Kiwi de France (l'unité)", prix: 0.35 },
+        "POMM01": { desc: "Pommes bicolores France (1.5kg)", prix: 1.79 },
+        "KNAC01": { desc: "Knacks d'Alsace (260g)", prix: 1.12 },
+        "GALE01": { desc: "6 Galettes Bretonnes Blé Noir", prix: 0.60 },
+        "LIMAN01": { desc: "4 Filets de Limande du Nord", prix: 2.79 }
+    };
+
+    function ajouterAuCatalogue() {
+        const ref = document.getElementById('newRef').value.toUpperCase();
+        const desc = document.getElementById('newDesc').value;
+        const prix = parseFloat(document.getElementById('newPrix').value);
+        if (ref && desc && prix) {
+            catalogue[ref] = { desc, prix };
+            localStorage.setItem('monCatalogue', JSON.stringify(catalogue));
+            alert("Produit ajouté !");
+        }
+    }
+
+    function ajouterLigne() {
+        const row = document.getElementById('corpsDevis').insertRow();
+        row.innerHTML = `
+            <td><input type="text" class="ref" placeholder="Code ou nom..." oninput="chercherDansCatalogue(this)"></td>
+            <td><input type="text" class="desc" style="width:95%"></td>
+            <td><input type="number" class="qty" value="1" oninput="calculerTotalGeneral()"></td>
+            <td><input type="number" class="pu" value="0" oninput="calculerTotalGeneral()"></td>
+            <td class="totalLigne" style="font-weight:bold">0.00 €</td>
+        `;
+    }
+
+    function chercherDansCatalogue(input) {
+        const recherche = input.value.toUpperCase();
+        const row = input.parentElement.parentElement;
+        
+        if (catalogue[recherche]) {
+            row.querySelector('.desc').value = catalogue[recherche].desc;
+            row.querySelector('.pu').value = catalogue[recherche].prix;
+            calculerTotalGeneral();
+            return;
+        }
+
+        if (recherche.length > 2) {
+            for (let code in catalogue) {
+                if (catalogue[code].desc.toUpperCase().includes(recherche)) {
+                    input.value = code;
+                    row.querySelector('.desc').value = catalogue[code].desc;
+                    row.querySelector('.pu').value = catalogue[code].prix;
+                    calculerTotalGeneral();
+                    break;
+                }
+            }
+        }
+    }
+
+    function calculerTotalGeneral() {
+        let totalHT = 0;
+        document.querySelectorAll('#corpsDevis tr').forEach(row => {
+            const qty = parseFloat(row.querySelector('.qty').value) || 0;
+            const pu = parseFloat(row.querySelector('.pu').value) || 0;
+            const ligneHT = qty * pu;
+            row.querySelector('.totalLigne').innerText = ligneHT.toFixed(2) + " €";
+            totalHT += ligneHT;
+        });
+        const taux = parseFloat(document.getElementById('tauxTVA').value);
+        const montantTVA = totalHT * taux;
+        document.getElementById('totalHT').innerText = totalHT.toFixed(2);
+        document.getElementById('montantTVA').innerText = montantTVA.toFixed(2);
+        document.getElementById('totalTTC').innerText = (totalHT + montantTVA).toFixed(2);
+        document.getElementById('tvaAffichee').innerText = (taux * 100).toFixed(0);
+    }
+
+    function genererPDF() {
+        const element = document.getElementById('devisContent');
+        const opt = { margin: 10, filename: 'Devis.pdf', html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }};
+        html2pdf().set(opt).from(element).save();
+    }
+
+    function reinitialiserDevis() {
+        if(confirm("Effacer le devis ?")) {
+            document.getElementById('nomClient').value = '';
+            document.getElementById('adresseClient').value = '';
+            document.getElementById('corpsDevis').innerHTML = '';
+            ajouterLigne();
+            calculerTotalGeneral();
+        }
+    }
+
+    window.onload = function() {
+        ['nomEntreprise', 'adresseEntreprise', 'siretEntreprise', 'telEntreprise'].forEach(id => {
+            const el = document.getElementById(id);
+            el.value = localStorage.getItem(id) || '';
+            el.addEventListener('input', () => localStorage.setItem(id, el.value));
+        });
+        ajouterLigne();
+    };
+</script>
+</body>
+</html>
